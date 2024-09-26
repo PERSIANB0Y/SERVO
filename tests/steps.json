@@ -1,0 +1,17 @@
+{
+    "event1":{
+        "step1":{
+            "time":0,
+            "direction":1
+        },
+        "step2":{
+            "time":10000,
+            "direction":1
+        },
+        "step3":{
+            "time":20000,
+            "direction":-1
+            
+        }
+    }
+}

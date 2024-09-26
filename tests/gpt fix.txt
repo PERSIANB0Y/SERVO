@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="../eel.js"></script>
+</head>
+<body style="zoom: 400%;">
+    <button id="left">left</button>
+    <button id="right">right</button>
+    <button id="record">record</button>
+    <script>
+        var isMouseDownL = false;
+        var isMouseDownR = false;
+        var record = false;
+        var holdTimer = null;
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        document.getElementById('record').addEventListener('click', () => {
+            record = !record;
+            console.log("Record mode:", record);
+        });
+
+        document.getElementById('left').addEventListener('mousedown', async () => {
+            if (!isMouseDownL) {
+                isMouseDownL = true;
+                eel.send_data('{"steps":-1, "hold":1}', record);  // Start movement
+                console.log("Left button pressed");
+            }
+        });
+
+        document.getElementById('left').addEventListener('mouseup', async () => {
+            isMouseDownL = false;
+            eel.send_data('{"steps":-1, "hold":0}', record);  // Stop movement
+            console.log("Left button released");
+        });
+
+        document.getElementById('right').addEventListener('mousedown', async () => {
+            if (!isMouseDownR) {
+                isMouseDownR = true;
+                eel.send_data('{"steps":1, "hold":1}', record);  // Start movement
+                console.log("Right button pressed");
+            }
+        });
+
+        document.getElementById('right').addEventListener('mouseup', async () => {
+            isMouseDownR = false;
+            eel.send_data('{"steps":1, "hold":0}', record);  // Stop movement
+            console.log("Right button released");
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+import eel
+import threading
+import json
+import time
+from pyfirmata import Arduino, util, OUTPUT
+
+eel.init('web')
+jsonFilePath = 'jsonData.json'
+board = Arduino('COM11')  # Change COM3 to your Arduino port
+
+Ap = 9
+Am = 8
+Bp = 7
+Bm = 6
+current_step = 0
+steps_request = 0
+direction = 0
+hold = 0
+stopThread = True
+recordModeState = False
+
+step_sequence = [
+    [1, 0, 0, 0],  # Step 1
+    [0, 1, 0, 0],  # Step 2
+    [0, 0, 1, 0],  # Step 3
+    [0, 0, 0, 1]   # Step 4
+]
+
+board.digital[Ap].mode = OUTPUT
+board.digital[Am].mode = OUTPUT
+board.digital[Bp].mode = OUTPUT
+board.digital[Bm].mode = OUTPUT
+
+# Define the function to perform motor steps
+def doStep():
+    global current_step, direction
+    current_step = current_step + direction
+    if current_step > 3:
+        current_step = 0
+    elif current_step < 0:
+        current_step = 3
+
+    board.digital[Ap].write(step_sequence[current_step][0])
+    board.digital[Bp].write(step_sequence[current_step][1])
+    board.digital[Am].write(step_sequence[current_step][2])
+    board.digital[Bm].write(step_sequence[current_step][3])
+
+    time.sleep(0.07)  # Delay for motor movement
+
+def holdFL():
+    global stopThread
+    while not stopThread:
+        doStep()
+
+# Expose Python function to JavaScript
+@eel.expose
+def send_data(jsonData, recordMode):
+    global stopThread, direction, hold
+
+    data = json.loads(jsonData)
+    direction = 1 if data['steps'] > 0 else -1
+    hold = data['hold']
+
+    print(f"Data received: steps={data['steps']}, hold={hold}, recordMode={recordMode}")
+
+    if hold == 1:
+        # Stop the previous thread if it's running
+        if not stopThread:
+            stopThread = True
+        # Start a new thread for continuous movement
+        stopThread = False
+        loop_thread = threading.Thread(target=holdFL, daemon=True)
+        loop_thread.start()
+    else:
+        # Stop the motor when the button is released
+        stopThread = True
+
+eel.start('index.html', size=(500, 300))

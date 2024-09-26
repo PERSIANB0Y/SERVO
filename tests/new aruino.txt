@@ -1,0 +1,60 @@
+#include <ArduinoJson.h>
+
+int Ap = 9;
+int Am = 8;
+int Bp = 7;
+int Bm = 6;
+int current_step = 0;
+int steps_request = 0;
+int acceleration = 0;
+int speed = 0;
+
+const int step_sequence[4][4] = {
+  {HIGH, LOW, LOW, LOW},  // Step 1
+  {LOW, HIGH, LOW, LOW},  // Step 2
+  {LOW, LOW, HIGH, LOW},  // Step 3
+  {LOW, LOW, LOW, HIGH}   // Step 4
+};
+
+void setup() {
+  pinMode(Ap, OUTPUT);
+  pinMode(Am, OUTPUT);
+  pinMode(Bp, OUTPUT);
+  pinMode(Bm, OUTPUT);
+  Serial.begin(115600);
+  Serial.println("started");
+}
+
+void loop() {
+  while (Serial.available() > 0) {
+    String jsonStr = Serial.readStringUntil('\n');
+    DynamicJsonDocument jsonDoc(126);
+    deserializeJson(jsonDoc, jsonStr);
+    // Serial.println("data received");
+
+    steps_request = jsonDoc["steps"].as<int>();
+    speed = jsonDoc["speed"].as<int>();
+    acceleration = jsonDoc["acceleration"].as<int>();
+
+    int steps_to_move = abs(steps_request);
+    int direction = (steps_request > 0) ? 1 : -1;
+
+    for (int i = 0; i < steps_to_move; i++) {
+      current_step += direction;
+      if (current_step > 3) current_step = 0;  // Wrap around if necessary
+      if (current_step < 0) current_step = 3;  // Wrap around if necessary
+
+      digitalWrite(Ap, step_sequence[current_step][0]);
+      digitalWrite(Bp, step_sequence[current_step][1]);
+      digitalWrite(Am, step_sequence[current_step][2]);
+      digitalWrite(Bm, step_sequence[current_step][3]);
+
+      delayMicroseconds(speed);
+    }
+    digitalWrite(Ap, LOW); // to unlock the motor after turning
+    digitalWrite(Bp, LOW); // to unlock the motor after turning
+    digitalWrite(Am, LOW); // to unlock the motor after turning
+    digitalWrite(Bm, LOW); // to unlock the motor after turning
+    Serial.println("Step sequence completed");
+  }
+}

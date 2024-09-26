@@ -1,0 +1,76 @@
+#include <ArduinoJson.h>
+
+int Ap = 10;
+int Am = 11;
+int Bp = 9;
+int Bm = 8;
+int state = 0;
+int next_step = 1;
+int steps_request = 0;
+int acceleration = 0;
+int speed = 0;
+int i = 0;
+
+void setup() {
+  pinMode(Ap,OUTPUT);
+  pinMode(Am,OUTPUT);
+  pinMode(Bp,OUTPUT);
+  pinMode(Bm,OUTPUT);
+  Serial.begin(9600);
+  Serial.println("started");
+}
+
+
+void loop() {
+
+  while (Serial.available() > 0) {
+    String jsonStr = Serial.readStringUntil('\n');
+    // String jsonStr = "{'steps':5,'speed':100, 'acceleration':1}";
+    //       {'steps':5,'speed':100, 'acceleration':1}
+    DynamicJsonDocument jsonDoc(2048);
+    deserializeJson(jsonDoc, jsonStr);
+    
+    steps_request = jsonDoc["steps"].as<int>();
+    speed = jsonDoc["speed"].as<int>();
+    acceleration = jsonDoc["acceleration"].as<int>();
+  
+    // if (steps_request < 0 || 1 < next_step < 5) next_step--;
+    // if (steps_request < 0 || next_step == 1) next_step = 4;
+    for (i = 0; i != abs(steps_request); i++) {
+      switch (next_step) {
+        case 1 :
+          digitalWrite(Ap,HIGH);
+          digitalWrite(Bm,LOW);
+          Serial.println(next_step);
+          if (steps_request > 0) next_step = 2;
+          if (steps_request < 0) next_step = 4;
+          delay(speed);
+          break;
+        case 2 :
+          digitalWrite(Ap,LOW);
+          digitalWrite(Bp,HIGH);
+          Serial.println(next_step);
+          if (steps_request > 0) next_step = 3;
+          if (steps_request < 0) next_step = 1;
+          delay(speed);
+          break;
+        case 3 :
+          digitalWrite(Bp,LOW);
+          digitalWrite(Am,HIGH);
+          Serial.println(next_step);
+          if (steps_request > 0) next_step = 4;
+          if (steps_request < 0) next_step = 2;
+          delay(speed);
+          break;
+        case 4 :
+          digitalWrite(Am,LOW);
+          digitalWrite(Bm,HIGH);
+          Serial.println(next_step);
+          if (steps_request > 0) next_step = 1;
+          if (steps_request < 0) next_step = 3;
+          delay(speed);
+          break;
+      }
+    }
+  }
+}
