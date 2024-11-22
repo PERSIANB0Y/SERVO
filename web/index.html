@@ -1,131 +1,410 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step Motor Control</title>
-    <script src="/eel.js"></script>
-</head>
-<body style="zoom: 400%; overflow: hidden;">
-    <button id="left">left</button>
-    <button id="right">right</button>
-    <button id="up">up</button>
-    <button id="down">down</button>
-    <input type="number" id="speed" placeholder="speed" style="width: 60px;"></input>
-    <input type="number" id="delay" placeholder="delay" style="width: 60px;"></input>
-    <button id="delaybtn">add delay</button>
-    <button id="recordMode">record</button>
-    <script>
-        var leftbtn = document.getElementById('left');
-        var rightbtn = document.getElementById('right');
-        var upbtn = document.getElementById('up');
-        var downbtn = document.getElementById('down');
-        var recordbtn = document.getElementById('recordMode');
-        var delaybtn = document.getElementById('delaybtn');
-        var delayinput = document.getElementById('delay').value;
-        var speedinput = document.getElementById('speed').value;
-        var isMouseDownL, isMouseDownR, isMouseDownU, isMouseDownD = false;
-        var timeoutId;
-        var recordMode = false;
-        var Hdir, Hcapacitor, Vdir, Vcapacitor = 0
-        
-        function delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-        
-        async function sendCommand(direction) {
-            eel.send_data(direction);
-            console.log("command sent")
-        }
-        
-        delaybtn.addEventListener('click', () => {
-            var delayinput = document.getElementById('delay').value;
-            sendCommand({"delay":delayinput,"recordMode":recordMode});
-            alert("delay added = "+delayinput);
-            document.getElementById('delay').value = 0;
-        });
-
-        recordbtn.addEventListener('click', () => {
-            recordMode = !recordMode;
-            alert("record mode : "+recordMode);
-        });
-        
-        leftbtn.addEventListener('mousedown', () => {
-            timeoutId = setTimeout(() => {
-                Hcapacitor--;
-                Hdir = -1;
-                isMouseDownL = true;
-            }, 500);
-        });
-        leftbtn.addEventListener('mouseup', () => {
-            clearTimeout(timeoutId);
-            if (isMouseDownL == false) Hcapacitor--; Hdir = -1;
-            isMouseDownL = false
-            console.log("Command cancelled.");
-        });
-        rightbtn.addEventListener('mousedown', () => {
-            timeoutId = setTimeout(() => {
-                Hcapacitor++;
-                Hdir = +1;
-                isMouseDownR = true;
-            }, 500);
-        });
-        rightbtn.addEventListener('mouseup', () => {
-            clearTimeout(timeoutId);
-            if (isMouseDownR == false) Hcapacitor++; Hdir = +1;
-            isMouseDownR = false;
-        });
-        upbtn.addEventListener('mousedown', () => {
-            timeoutId = setTimeout(() => {
-                Vcapacitor--; 
-                Vdir = -1;
-                isMouseDownU = true;
-            }, 500);
-        });
-        upbtn.addEventListener('mouseup', () => {
-            clearTimeout(timeoutId);
-            if (isMouseDownR == false) Vcapacitor--; Vdir = -1;
-            isMouseDownU = false;
-        });
-        downbtn.addEventListener('mousedown', () => {
-            timeoutId = setTimeout(() => {
-                Vcapacitor++; 
-                Vdir = +1;
-                isMouseDownD = true;
-            }, 500);
-        });
-        downbtn.addEventListener('mouseup', () => {
-            clearTimeout(timeoutId);
-            if (isMouseDownR == false) Vcapacitor++; Vdir = +1;
-            isMouseDownD = false;
-        });
-        
-        
-        async function holdCheck() {
-            while (true) {
-                var speedinput = document.getElementById("speed").value;
-                
-                if (isMouseDownL){
-                    sendCommand({"H": -1,"speed":speedinput, "recordMode":recordMode}); 
-                    console.log("<");
-                }
-                if (isMouseDownR){ 
-                    sendCommand({"H": 1, "speed":speedinput, "recordMode":recordMode}); 
-                    console.log(">");
-                }
-                if (isMouseDownU){
-                    sendCommand({"V": -1,"speed":speedinput, "recordMode":recordMode}); 
-                    console.log("<");
-                }
-                if (isMouseDownD){ 
-                    sendCommand({"V": 1, "speed":speedinput, "recordMode":recordMode}); 
-                    console.log(">");
-                }
-                await delay(speedinput);
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Robotic Arm Controller</title>
+        <style>
+            body {
+                animation: 1s ease;
+                font-family: 'Roboto', sans-serif;
+                background-color: #f4f4f9;
+                color: #333;
+                margin: 0;
+                display: flex;
+                height: 100vh; /* Full height */
             }
-        }
 
-        holdCheck();
-    </script>
-</body>
-</html>
+            .container {
+                display: flex;
+                width: 100%;
+            }
+
+            #logs {
+                flex: 1; /* Allow logs to take available space */
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between; /* Distribute space evenly */
+            }
+
+            #controls {
+                width: 500px; /* Fixed width for controls */
+                padding: 20px;
+                border-left: 2px solid #ddd; /* Separate controls from logs */
+                background-color: #ffffff;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            h1 {
+                color: #4a90e2;
+                margin-bottom: 20px;
+            }
+
+            button {
+                padding: 12px 20px;
+                margin: 10px 0;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                color: #fff;
+                background-color: #4a90e2;
+                transition: background-color 0.3s ease;
+                width: 100%;
+            }
+
+            button:hover {
+                background-color: #234d7e;
+            }
+
+            #jsonOutput, #eventsContainer {
+                white-space: pre-wrap;
+                height: 40%; /* Fixed height for logs */
+                overflow: auto; /* Hide overflow */
+                background-color: #ffffff;
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                margin-top: 20px;
+            }
+
+            #addSpace{
+                width: 150px;
+            }
+            .speed-control {
+                margin: 20px 0;
+                display: flex;
+                align-items: center;
+            }
+
+            input[type="number"] {
+                width: 80px;
+                padding: 10px;
+                border-radius: 5px;
+                border: 1px solid #ddd;
+                margin-left: 10px;
+            }
+
+            #up,#down,#right,#left{
+                width: 100px;
+                height: 50px;
+                margin: 10px;
+            }
+            .directions{
+                justify-items: center;
+                width: 100%;
+            }
+
+            h2 {
+                color: #666;
+                margin-top: 30px;
+            }
+
+            .event {
+                margin-bottom: 10px;
+                padding: 10px;
+                background-color: #e8f4fd;
+                border: 1px solid #b0d0e6;
+                border-radius: 5px;
+            }
+
+            /* Responsive Design */
+            @media (max-width: 600px) {
+                button {
+                    padding: 10px; /* Adjust button padding */
+                }
+
+                #controls {
+                    width: 100%; /* Full width on smaller screens */
+                    border-left: none; /* Remove border on small screens */
+                    border-top: 2px solid #ddd; /* Add border on top */
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div id="logs">
+                <h2>Recorded Events</h2>
+                <div id="eventsContainer">No events recorded yet.</div>
+                <h2>JSON Output</h2>
+                <div id="jsonOutput">No data recorded yet.</div>
+            </div>
+
+            <div id="controls">
+                <h1>Robotic Arm Controller</h1>
+                <button id="toggleRecording" title="Press 'S' to toggle recording">Start Recording (S)</button>
+                <button id="removeLastEvent" title="Press 'R' to remove the last recorded event">Remove Last Event (R)</button>
+                <button id="clearJson" title="Press 'C' to clear all JSON data">Clear JSON (C)</button>
+                <div class="space-control">
+                    <label for="spaceInput">add space between steps (ms): </label>
+                    <input type="number" id="spaceInput" value="1000">
+                    <button id="addSpace">add space (A)</button>
+                </div>
+                <div class="speed-control">
+                    <label for="speedInput">speed (space between next step in ms): </label>
+                    <input type="number" id="speedInput" value="100" min="7">
+                </div>
+                <h2>Directional Controls</h2>
+                <div class="directions">
+                    <div class="direction-buttons">
+                        <button id="up" title="Press 'Up Arrow' to move up">Up</button>
+                    </div>
+                    <div class="direction-buttons">
+                        <button id="left" title="Press 'Left Arrow' to move left">Left</button>
+                        <button id="right" title="Press 'Right Arrow' to move right">Right</button>
+                    </div>
+                    <div class="direction-buttons">
+                        <button id="down" title="Press 'Down Arrow' to move down">Down</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script src="/eel.js"></script>
+        <script>
+            let jsonData = {}; 
+            let steps = 0; 
+            let recordMode = false; 
+            let currentDirection = null; 
+            let stepInterval; 
+            let eventCounter = 1; 
+            let speedDelay = 100;
+            let spaceDuration = null;
+            let holdTimeout; 
+            let isHolding = false; 
+            let selectedEvent = null;
+            document.querySelector("#addSpace").addEventListener("click",()=> spaceDuration = document.querySelector("#spaceInput").value);
+            
+            function displayData(data) {
+                document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 4);
+            }
+            
+            function doStep(direction) {
+                console.log("Step executed in direction:", direction);
+                eel.doStep(direction);
+            }
+            
+            function delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            async function doEvent(chosenEvent, data, speedDelay) {
+                speedDelay = document.getElementById('speedInput').value;
+                
+                console.log(JSON.stringify(data[chosenEvent], null, 4))
+                console.log("executed event:", chosenEvent);
+                
+                for (let steps in data[chosenEvent]) {
+                    let step = data[chosenEvent][steps];
+                    let direction = step.direction;
+                    let allSteps = step.steps;
+                    console.log(steps);
+                    console.log(direction);
+                    console.log(allSteps);
+                    for (let i = 0; i < allSteps; i++) {
+                        eel.doStep(direction);
+                        await delay(speedDelay)
+                    }
+                }
+            }
+
+            function addSpace(space) {
+                spaceDuration = space;
+            }
+            
+            function addMove(direction) {
+                speedDelay = document.getElementById('speedInput').value;
+                doStep(direction);  // Execute step regardless of recording mode
+
+                // Only save data if recording
+                if (recordMode) {  
+                    if (currentDirection && currentDirection !== direction) {
+                        saveCurrentSequence();
+                    }
+
+                    clearTimeout(holdTimeout);
+                    isHolding = false;
+
+
+                    if (event.key != "ArrowLeft" && event.key != "ArrowRight" && event.key != "ArrowUp" && event.key != "ArrowDown"){
+
+                        holdTimeout = setTimeout(() => {
+                            isHolding = true;
+                            clearInterval(stepInterval);
+                            
+                            
+                            // Execute steps repeatedly at the defined speed
+                            stepInterval = setInterval(() => {
+                                steps += 1;
+                                doStep(direction);
+                            }, speedDelay);
+                        }, 500);
+
+                    }
+                    // Handle direction and steps for recording
+                    if (!currentDirection || currentDirection !== direction) {
+                        currentDirection = direction;
+                        steps = 1;
+                    } else {
+                        steps += 1;
+                    }
+                }
+            }
+
+            function saveCurrentSequence() {
+                if (steps > 0 && currentDirection) {
+                    if (!jsonData[`event${eventCounter}`]) {
+                        jsonData[`event${eventCounter}`] = {};
+                    }
+
+                    const stepNumber = `step${Object.keys(jsonData[`event${eventCounter}`]).length + 1}`;
+
+                    jsonData[`event${eventCounter}`][stepNumber] = {
+                        "direction": currentDirection,
+                        "steps": steps,
+                        "speed":speedDelay,
+                        "space":spaceDuration
+                    };
+
+                    displayData(jsonData); 
+                    renderEvents(jsonData); // Render the events here
+
+                    steps = 0;
+                    currentDirection = null; 
+                    spaceDuration = 0; 
+                    isHolding = false;
+                }
+            }
+
+            function renderEvents(data) {
+                const eventsContainer = document.getElementById('eventsContainer');
+                eventsContainer.innerHTML = ''; // Clear previous events
+
+                // Check if there are any recorded events
+                if (Object.keys(data).length === 0) {
+                    eventsContainer.innerHTML = 'No events recorded yet.';
+                    return;
+                }
+
+                // Iterate through each event in the JSON data
+                for (const eventName of Object.keys(data)) {
+                    const eventDiv = document.createElement('div');
+                    eventDiv.className = 'event'; // Optional: add a class for styling
+                    eventDiv.innerHTML = `<strong>${eventName}</strong>`; // Display the event name only
+                    eventDiv.addEventListener("click",()=>{
+                        console.log(eventName," selected");
+                        selectedEvent = eventName;
+                        doEvent(eventName, data)
+                    });
+
+                    // No steps displayed here
+                    eventsContainer.appendChild(eventDiv); // Append the event div to the container
+                }
+            }
+
+            function toggleRecording() {
+                if (recordMode) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            }
+
+            function startRecording() {
+                if (recordMode) return; 
+                recordMode = true; 
+                eventCounter = Object.keys(jsonData).length + 1; 
+                document.getElementById('toggleRecording').textContent = "Stop Recording (S)"; // Change button text
+                document.getElementById('toggleRecording').style.backgroundColor = "#b83535";
+            }
+            
+            function stopRecording() {
+                if (recordMode) {
+                    if (currentDirection) {
+                        saveCurrentSequence(); 
+                    }
+                    recordMode = false;
+                    eventCounter++;
+                    document.getElementById('toggleRecording').textContent = "Start Recording (S)"; // Change button text
+                    document.getElementById('toggleRecording').style.backgroundColor = "#4a90e2";
+                }
+            }
+
+            function clearJsonData() {
+                if (confirm("Are you sure you want to clear all JSON data?")) {
+                    jsonData = {}; 
+                    displayData(jsonData); 
+                    renderEvents(jsonData); 
+                }
+            }
+
+            function removeLastEvent() {
+                if (confirm("Are you sure you want to remove the last event?")) {
+                    if (eventCounter > 1) {
+                        delete jsonData[`event${eventCounter - 1}`]; 
+                        eventCounter--; 
+                        displayData(jsonData); 
+                        renderEvents(jsonData); 
+                    } else {
+                        alert("No events to remove.");
+                    }
+                }
+            }
+
+            document.getElementById('toggleRecording').addEventListener('click', toggleRecording);
+            document.getElementById('clearJson').addEventListener('click', clearJsonData);
+            document.getElementById('removeLastEvent').addEventListener('click', removeLastEvent);
+
+            // Event listeners for directional buttons
+            document.getElementById('up').addEventListener('mousedown', () => addMove("up"));
+            document.getElementById('down').addEventListener('mousedown', () => addMove("down"));
+            document.getElementById('left').addEventListener('mousedown', () => addMove("left"));
+            document.getElementById('right').addEventListener('mousedown', () => addMove("right"));
+
+            // Stop repeating steps when the mouse is released
+            const stopMoving = () => {
+                clearTimeout(holdTimeout); 
+                clearInterval(stepInterval); 
+                isHolding = false; 
+            };
+
+            document.getElementById('up').addEventListener('mouseup', stopMoving);
+            document.getElementById('down').addEventListener('mouseup', stopMoving);
+            document.getElementById('left').addEventListener('mouseup', stopMoving);
+            document.getElementById('right').addEventListener('mouseup', stopMoving);
+
+            // Keyboard controls
+            document.addEventListener('keyup', (event) => {stopMoving; console.log(event.key)});
+            document.addEventListener('keydown', (event) => {
+                switch (event.key) {
+                    case 'a':
+                        addSpace(document.querySelector("#spaceInput").value);
+                        break;
+                    case 's':
+                        toggleRecording();
+                        break;
+                    case 'r':
+                        removeLastEvent();
+                        break;
+                    case 'c':
+                        clearJsonData();
+                        break;
+                    case 'ArrowUp':
+                        addMove('up');
+                        break;
+                    case 'ArrowDown':
+                        addMove('down');
+                        break;
+                    case 'ArrowLeft':
+                        addMove('left');
+                        break;
+                    case 'ArrowRight':
+                        addMove('right');
+                        break;
+                }
+            });
+        </script>
+    </body>
+    </html>
